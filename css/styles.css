@@ -429,6 +429,80 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); outlin
   margin-bottom: 16px;
 }
 
+/* ── Modals ── */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  backdrop-filter: blur(3px);
+}
+.modal-box {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  box-shadow: var(--shadow-lg);
+  max-height: 90vh;
+  overflow-y: auto;
+  width: 90%;
+}
+
+/* ── Combo Fridge ── */
+.combo-card { border-top-width: 4px; }
+.combo-badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #2980b9, #c0392b);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+}
+.unit-block {
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-light);
+}
+.unit-comp-label {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.compartment-box {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-light);
+}
+.frigo-box { border-left: 3px solid #2980b9; }
+.freezer-box { border-left: 3px solid #c0392b; }
+.comp-label { font-size: 11px; font-weight: 700; color: var(--text-secondary); display: block; margin-bottom: 4px; }
+
+/* ── Batch Progress ── */
+.batch-progress-bar-wrap {
+  height: 8px;
+  background: var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+.batch-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+  border-radius: 8px;
+  transition: width 0.15s;
+}
+#batch-status { font-size: 12px; color: var(--text-muted); }
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .container { padding: 12px; }
