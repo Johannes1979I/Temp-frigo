@@ -1,0 +1,445 @@
+/* ============================================
+   Registro Temperature Frigoriferi — Styles
+   v1.0 — Design matching Curve Glicemiche
+   ============================================ */
+
+:root {
+  --bg: #f0f4f8;
+  --surface: #ffffff;
+  --surface-alt: #f7f9fb;
+  --primary: #1a5276;
+  --primary-light: #2980b9;
+  --primary-pale: #eaf4fb;
+  --accent: #16a085;
+  --accent-pale: #e8f8f5;
+  --text: #1a1a1a;
+  --text-secondary: #5a5a5a;
+  --text-muted: #8a8a8a;
+  --border: #dce4ec;
+  --border-light: #eaeff4;
+  --warning: #d4a017;
+  --warning-pale: #fef9e7;
+  --danger: #c0392b;
+  --danger-pale: #fdecea;
+  --success: #27ae60;
+  --success-pale: #e8f8ef;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.10);
+  --radius: 10px;
+  --radius-lg: 16px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+.app-header {
+  background: linear-gradient(135deg, #1a5276, #2980b9);
+  color: white;
+  padding: 18px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--shadow-md);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.app-header svg { width: 38px; height: 38px; flex-shrink: 0; }
+.app-header h1 { font-family: 'Source Serif 4', serif; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+.app-header .subtitle { font-size: 13px; opacity: 0.8; font-weight: 300; }
+
+.container { max-width: 1300px; margin: 0 auto; padding: 20px; }
+
+/* ── Tabs ── */
+.section-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: var(--surface);
+  padding: 5px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+.section-tab {
+  flex: 1;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all .2s;
+  white-space: nowrap;
+}
+.section-tab:hover { background: var(--primary-pale); color: var(--primary); }
+.section-tab.active { background: var(--primary); color: white; box-shadow: var(--shadow-sm); }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+.card-header {
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-alt);
+}
+.card-header h2 { font-size: 16px; font-weight: 600; color: var(--primary); }
+.card-header .icon { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.card-body { padding: 20px 24px; }
+
+/* ── Month Selector ── */
+.month-selector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.month-selector button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 36px; height: 36px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .2s;
+}
+.month-selector button:hover { background: var(--primary); color: white; border-color: var(--primary); }
+#month-display {
+  font-family: 'Source Serif 4', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--primary);
+  min-width: 200px;
+  text-align: center;
+}
+
+/* ── Fridge Cards Grid ── */
+.fridge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.fridge-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+  border-top: 4px solid var(--fridge-color, var(--primary));
+  transition: transform .15s, box-shadow .15s;
+}
+.fridge-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+
+.fridge-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.fridge-type-badge {
+  padding: 3px 10px;
+  border-radius: 20px;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.fridge-status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #bdc3c7;
+}
+.status-ok .fridge-status-dot { background: var(--success); box-shadow: 0 0 6px var(--success); }
+.status-warn .fridge-status-dot { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+.status-alarm .fridge-status-dot { background: var(--danger); box-shadow: 0 0 6px var(--danger); animation: pulse 1.5s infinite; }
+.status-empty .fridge-status-dot { background: #bdc3c7; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.fridge-name { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+.fridge-range { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
+
+.fridge-stats { display: flex; gap: 12px; margin-bottom: 12px; }
+.fridge-stat { flex: 1; text-align: center; }
+.fridge-stat-val { font-size: 18px; font-weight: 700; color: var(--primary); }
+.fridge-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.alarm-text { color: var(--danger) !important; }
+
+.fridge-progress { height: 4px; background: var(--border-light); border-radius: 4px; overflow: hidden; }
+.fridge-progress-bar { height: 100%; border-radius: 4px; transition: width .3s; }
+.fridge-pct { font-size: 11px; color: var(--text-muted); text-align: right; margin-top: 4px; }
+
+/* ── Data Entry ── */
+.fridge-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.fridge-tab {
+  padding: 8px 16px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all .2s;
+}
+.fridge-tab:hover { border-color: var(--fc, var(--primary)); }
+.fridge-tab.active { background: var(--fc, var(--primary)); color: white; border-color: var(--fc, var(--primary)); }
+
+.acq-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.acq-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.acq-btn.active { background: var(--primary) !important; color: white !important; border-color: var(--primary) !important; }
+
+.operator-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.operator-row input { max-width: 250px; }
+
+.data-table-wrap { overflow-x: auto; }
+
+.temp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.temp-table th {
+  background: var(--primary);
+  color: white;
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.temp-table td { padding: 5px 8px; text-align: center; border-bottom: 1px solid var(--border-light); }
+
+.temp-row.ok { background: var(--success-pale); }
+.temp-row.warning { background: var(--warning-pale); }
+.temp-row.alarm { background: var(--danger-pale); }
+.temp-row.missing { background: transparent; }
+.temp-row.today-row { outline: 2px solid var(--primary); outline-offset: -1px; }
+
+.day-name { font-weight: 600; color: var(--text-secondary); }
+.day-date { font-variant-numeric: tabular-nums; }
+.time-cell, .method-cell { font-size: 11px; color: var(--text-muted); }
+
+.temp-input {
+  width: 80px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  background: white;
+  transition: border-color .2s;
+}
+.temp-input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px var(--primary-pale); }
+
+.note-input {
+  width: 100%;
+  min-width: 80px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 11px;
+  background: transparent;
+}
+.note-input:hover, .note-input:focus { border-color: var(--border); background: white; outline: none; }
+
+.btn-remove {
+  background: none;
+  border: none;
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.btn-remove:hover { background: var(--danger-pale); }
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.st-ok { background: var(--success-pale); color: var(--success); }
+.st-warn { background: var(--warning-pale); color: var(--warning); }
+.st-alarm { background: var(--danger-pale); color: var(--danger); animation: pulse 1.5s infinite; }
+.st-miss { background: var(--border-light); color: var(--text-muted); }
+
+.summary-bar {
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.sum-ok { color: var(--success); }
+.sum-warn { color: var(--warning); }
+.sum-alarm { color: var(--danger); }
+.sum-miss { color: var(--text-muted); }
+
+/* ── Charts ── */
+.chart-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
+}
+.chart-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+
+/* ── Settings ── */
+.setting-card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-sm);
+}
+.setting-row {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+/* ── Forms ── */
+.form-group { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.form-group label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.3px; }
+input[type="text"], input[type="number"], input[type="date"], select, textarea {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  transition: border-color .2s;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px var(--primary-pale); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all .15s;
+}
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 6px; }
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-light); transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { opacity: 0.9; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { opacity: 0.9; }
+.btn-outline { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+.btn-danger-outline { background: transparent; color: var(--danger); border: 1px solid var(--danger); border-radius: 8px; font-weight: 600; cursor: pointer; }
+
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── Upload ── */
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .2s;
+  position: relative;
+}
+.upload-zone:hover { border-color: var(--primary); background: var(--primary-pale); }
+#header-preview { max-height: 60px; max-width: 100%; }
+.hidden { display: none !important; }
+
+/* ── Archive ── */
+.archive-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-light);
+  gap: 12px;
+}
+.archive-item:last-child { border-bottom: none; }
+
+/* ── PDF Section ── */
+#pdf-preview-info {
+  padding: 14px 20px;
+  background: var(--primary-pale);
+  border-radius: var(--radius);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .container { padding: 12px; }
+  .app-header { padding: 14px 16px; }
+  .app-header h1 { font-size: 17px; }
+  .fridge-grid { grid-template-columns: 1fr; }
+  .section-tab { font-size: 11px; padding: 8px 6px; }
+  .setting-row { flex-direction: column; }
+  .month-selector { gap: 8px; }
+  #month-display { font-size: 16px; min-width: 160px; }
+  .temp-table { font-size: 11px; }
+  .temp-input { width: 60px; font-size: 12px; }
+  .acq-bar { padding: 8px 10px; }
+}

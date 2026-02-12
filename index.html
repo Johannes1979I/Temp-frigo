@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Registro Temperature Frigoriferi — Laboratorio</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><rect x='2' y='2' width='32' height='32' rx='8' fill='%231a5276'/><text x='18' y='25' text-anchor='middle' fill='white' font-size='20'>❄</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Source+Serif+4:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="2" y="2" width="36" height="36" rx="10" stroke="white" stroke-width="2" fill="none"/>
+    <rect x="13" y="6" width="14" height="28" rx="3" stroke="white" stroke-width="1.8" fill="none"/>
+    <line x1="16" y1="12" x2="24" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="16" y1="17" x2="24" y2="17" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+    <circle cx="20" cy="24" r="3" stroke="white" stroke-width="1.5" fill="none"/>
+    <line x1="20" y1="22" x2="20" y2="26" stroke="white" stroke-width="1.2" stroke-linecap="round"/>
+    <path d="M7 16 L10 14 L10 22 L7 20 Z" fill="white" opacity="0.6"/>
+    <path d="M33 16 L30 14 L30 22 L33 20 Z" fill="white" opacity="0.6"/>
+  </svg>
+  <div>
+    <h1>Registro Temperature Frigoriferi</h1>
+    <div class="subtitle">Monitoraggio giornaliero — Laboratorio Analisi</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Month Selector -->
+  <div class="month-selector">
+    <button onclick="prevMonth()">◀</button>
+    <div id="month-display"></div>
+    <button onclick="nextMonth()">▶</button>
+  </div>
+
+  <!-- TABS -->
+  <div class="section-tabs">
+    <button class="section-tab active" onclick="showSection('dashboard')">① Dashboard</button>
+    <button class="section-tab" onclick="showSection('data')">② Inserimento Dati</button>
+    <button class="section-tab" onclick="showSection('charts')">③ Grafici</button>
+    <button class="section-tab" onclick="showSection('pdf')">④ Report PDF</button>
+    <button class="section-tab" onclick="showSection('settings')">⑤ Impostazioni</button>
+  </div>
+
+  <!-- ═══════════ SECTION: DASHBOARD ═══════════ -->
+  <div id="section-dashboard" class="fade-in">
+    <div class="fridge-grid" id="fridge-cards"></div>
+  </div>
+
+  <!-- ═══════════ SECTION: DATA ENTRY ═══════════ -->
+  <div id="section-data" class="hidden">
+    <div class="card">
+      <div class="card-header">
+        <div class="icon" style="background:var(--primary-pale);color:var(--primary)">🌡️</div>
+        <h2>Rilevazione Temperature</h2>
+      </div>
+      <div class="card-body">
+        <div id="data-grid-container"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION: CHARTS ═══════════ -->
+  <div id="section-charts" class="hidden">
+    <div id="charts-container"></div>
+  </div>
+
+  <!-- ═══════════ SECTION: PDF ═══════════ -->
+  <div id="section-pdf" class="hidden">
+    <div class="card">
+      <div class="card-header">
+        <div class="icon" style="background:var(--accent-pale);color:var(--accent)">📄</div>
+        <h2>Genera Report Mensile PDF</h2>
+      </div>
+      <div class="card-body">
+        <div id="pdf-preview-info"></div>
+
+        <div class="grid-2" style="margin-bottom:16px">
+          <div class="form-group">
+            <label>Nome Laboratorio</label>
+            <input type="text" id="lab-name" value="Laboratorio Analisi — P.O. Giovanni Paolo I" placeholder="Nome laboratorio">
+          </div>
+          <div class="form-group">
+            <label>Note aggiuntive (opzionale)</label>
+            <textarea id="pdf-notes-frigo" rows="2" placeholder="Note da aggiungere al report..."></textarea>
+          </div>
+        </div>
+
+        <!-- Logo Upload -->
+        <div class="form-group" style="margin-bottom:16px">
+          <label>Logo Intestazione</label>
+          <div class="upload-zone" onclick="document.getElementById('logo-file').click()">
+            <img id="header-preview" class="hidden" alt="Logo">
+            <div id="upload-placeholder">📷 Clicca per caricare il logo</div>
+            <input type="file" id="logo-file" accept="image/*" style="display:none" onchange="handleLogoUpload(event)">
+          </div>
+          <button class="btn btn-sm btn-outline" id="btn-remove-header" style="display:none;margin-top:6px" onclick="removeLogo()">Rimuovi logo</button>
+        </div>
+
+        <div id="lib-status" style="margin-bottom:16px"></div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="generatePDF()">📄 Genera e Scarica PDF</button>
+        </div>
+
+        <!-- Archive -->
+        <div style="margin-top:24px">
+          <h3 style="font-size:14px;color:var(--primary);margin-bottom:10px">📁 Report Archiviati</h3>
+          <div id="archive-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════ SECTION: SETTINGS ═══════════ -->
+  <div id="section-settings" class="hidden">
+    <div class="card">
+      <div class="card-header">
+        <div class="icon" style="background:var(--accent-pale);color:var(--accent)">⚙️</div>
+        <h2>Configurazione Frigoriferi</h2>
+      </div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Rinomina i frigoriferi, cambia tipo, range di temperatura e colore. Le modifiche vengono salvate automaticamente.</p>
+        <div id="fridge-settings-list"></div>
+        <div class="btn-group" style="margin-top:16px">
+          <button class="btn btn-outline" onclick="resetFridges()">🔄 Ripristina predefiniti</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="icon" style="background:var(--warning-pale);color:var(--warning)">💾</div>
+        <h2>Gestione Dati</h2>
+      </div>
+      <div class="card-body">
+        <div class="btn-group">
+          <button class="btn btn-outline" onclick="exportData()">📤 Esporta dati (JSON)</button>
+          <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">📥 Importa dati</button>
+          <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)">
+          <button class="btn btn-danger-outline" onclick="clearAllData()">🗑️ Cancella tutti i dati</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- JS Modules -->
+<script src="js/state.js"></script>
+<script src="js/navigation.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/data-entry.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/pdf-generator.js"></script>
+<script src="js/settings.js"></script>
+<script src="js/init.js"></script>
+
+</body>
+</html>
