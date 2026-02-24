@@ -107,7 +107,11 @@ function fillRandomTempsUnit() {
   const unit = units[selectedUnitIdx];
   if(!unit) return;
   if(!confirm('Generare temperature casuali per "'+unit.label+'" \u2014 '+MONTH_NAMES[state.month]+' '+state.year+'?\n(Sovrascrive i dati esistenti)')) return;
-  getWorkingDays(state.year, state.month).forEach(d => setReading(unit.uid, d.date, generateRandomTemp(unit), 'Generato', getOperator(), ''));
+  /* ~10% di probabilità di irregolarità per singola rilevazione */
+  getWorkingDays(state.year, state.month).forEach(d => {
+    const irregular = Math.random() < 0.10;
+    setReading(unit.uid, d.date, generateRandomTemp(unit, irregular), 'Generato', getOperator(), '');
+  });
   renderDataGrid();
 }
 
@@ -168,21 +172,47 @@ function runBatchGeneration() {
   const btn = document.getElementById('batch-go-btn');
   btn.disabled = true;
 
-  // Calculate total work
-  let totalDays = 0, generated = 0, skipped = 0;
-  const tasks = [];
+  /* ── Pre-calcola tutti i task raggruppando per data ──
+     Per ogni giorno decide max 3 irregolarità distribuite casualmente
+     tra le unità selezionate.  Probabilità giornaliere:
+       ~70% → 0 irregolarità, ~15% → 1, ~10% → 2, ~5% → 3              */
+  let generated = 0, skipped = 0;
+  const tasks = [];   /* flat array con .forceIrregular preassegnato */
+
   for (let y=yearFrom; y<=yearTo; y++) {
     const mStart = (y===yearFrom) ? monthFrom : 0;
     const mEnd = (y===yearTo) ? monthTo : 11;
     for (let m=mStart; m<=mEnd; m++) {
       const wd = getWorkingDays(y, m);
-      selected.forEach(idx => {
-        const u = units[idx];
-        wd.forEach(d => tasks.push({uid:u.uid, date:d.date, unit:u}));
+      wd.forEach(d => {
+        /* Raccogli tutte le unità per questo giorno */
+        const dayTasks = [];
+        selected.forEach(idx => {
+          const u = units[idx];
+          dayTasks.push({uid:u.uid, date:d.date, unit:u, forceIrregular:false});
+        });
+
+        /* Quanti allarmi oggi? (max 3) */
+        const rnd = Math.random();
+        const numIrreg = rnd < 0.70 ? 0 : rnd < 0.85 ? 1 : rnd < 0.95 ? 2 : 3;
+
+        if (numIrreg > 0 && dayTasks.length > 0) {
+          /* Mescola gli indici (Fisher-Yates) e marca i primi numIrreg come irregolari */
+          const indices = dayTasks.map((_,i)=>i);
+          for (let i=indices.length-1; i>0; i--) {
+            const j=Math.floor(Math.random()*(i+1));
+            [indices[i],indices[j]]=[indices[j],indices[i]];
+          }
+          for (let k=0; k<Math.min(numIrreg, indices.length); k++) {
+            dayTasks[indices[k]].forceIrregular = true;
+          }
+        }
+
+        dayTasks.forEach(t => tasks.push(t));
       });
     }
   }
-  totalDays = tasks.length;
+  const totalDays = tasks.length;
 
   progressEl.innerHTML = '<div class="batch-progress-bar-wrap"><div class="batch-progress-bar" id="batch-bar" style="width:0%"></div></div><div id="batch-status">Generazione in corso... 0/'+totalDays+'</div>';
 
@@ -195,7 +225,7 @@ function runBatchGeneration() {
       const t = tasks[idx];
       const existing = getReading(t.uid, t.date);
       if (existing && !overwrite) { skipped++; continue; }
-      const temp = generateRandomTemp(t.unit);
+      const temp = generateRandomTemp(t.unit, t.forceIrregular);
       // Direct write to avoid excessive saveData calls
       state.readings[getReadingKey(t.uid, t.date)] = {
         temp, time:'08:00', method:'Batch', operator, notes:'', timestamp:new Date().toISOString()

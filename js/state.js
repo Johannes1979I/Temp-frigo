@@ -11,13 +11,32 @@ const state = {
 };
 
 /* ── Default Fridge Setup (Giovanni Paolo I) ── */
+/* Tutti combinati (Frigo + Freezer).  typicalT = centro generazione casuale */
 const DEFAULT_FRIDGES = [
-  { id: 'F1', name: 'Frigo 1 — Reagenti',        type: '+4',   minT: 2, maxT: 8,   color: '#2980b9' },
-  { id: 'F2', name: 'Frigo 2 — Campioni',         type: '+4',   minT: 2, maxT: 8,   color: '#27ae60' },
-  { id: 'F3', name: 'Frigo 3 — Kit Diagnostici',  type: '+4',   minT: 2, maxT: 8,   color: '#8e44ad' },
-  { id: 'F4', name: 'Freezer 1 — Sieri',          type: '-20',  minT: -25, maxT: -15, color: '#c0392b' },
-  { id: 'F5', name: 'Freezer 2 — Ceppi ATCC',     type: '-20',  minT: -25, maxT: -15, color: '#d35400' },
-  { id: 'F6', name: 'Freezer 3 — Backup',         type: '-20',  minT: -25, maxT: -15, color: '#16a085' },
+  { id: 'F1', name: 'Frigo 1', type: 'combo',
+    minT_frigo: -1, maxT_frigo: 5, typicalT_frigo: 2,
+    minT_freezer: -20, maxT_freezer: -12, typicalT_freezer: -16,
+    color: '#2980b9', color2: '#1a5276' },
+  { id: 'F2', name: 'Frigo 2', type: 'combo',
+    minT_frigo: 8, maxT_frigo: 14, typicalT_frigo: 11.2,
+    minT_freezer: -18, maxT_freezer: -11, typicalT_freezer: -14.5,
+    color: '#27ae60', color2: '#1e8449' },
+  { id: 'F3', name: 'Frigo 3', type: 'combo',
+    minT_frigo: 10, maxT_frigo: 16, typicalT_frigo: 13.2,
+    minT_freezer: -14, maxT_freezer: -6, typicalT_freezer: -9.7,
+    color: '#8e44ad', color2: '#6c3483' },
+  { id: 'F4', name: 'Frigo 4', type: 'combo',
+    minT_frigo: 8, maxT_frigo: 15, typicalT_frigo: 11.3,
+    minT_freezer: -20, maxT_freezer: -12, typicalT_freezer: -15.8,
+    color: '#c0392b', color2: '#922b21' },
+  { id: 'F5', name: 'Frigo 5', type: 'combo',
+    minT_frigo: 9, maxT_frigo: 16, typicalT_frigo: 12.6,
+    minT_freezer: -22, maxT_freezer: -14, typicalT_freezer: -17.8,
+    color: '#d35400', color2: '#a04000' },
+  { id: 'F6', name: 'Frigo 6', type: 'combo',
+    minT_frigo: 7, maxT_frigo: 14, typicalT_frigo: 10.6,
+    minT_freezer: -33, maxT_freezer: -25, typicalT_freezer: -29,
+    color: '#16a085', color2: '#0e6655' },
 ];
 
 /* ── Italian Public Holidays ── */
@@ -63,15 +82,21 @@ const MONTH_NAMES = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
    Each unit is { uid, parentId, name, label, type, minT, maxT, color, compartment } */
 function getUnits(fridge) {
   if (fridge.type === 'combo') {
+    const minF = fridge.minT_frigo ?? 2, maxF = fridge.maxT_frigo ?? 8;
+    const minZ = fridge.minT_freezer ?? -25, maxZ = fridge.maxT_freezer ?? -15;
     return [
       { uid: fridge.id+':frigo',   parentId: fridge.id, name: fridge.name, label: fridge.name+' [Frigo]',
-        type: '+4', minT: fridge.minT_frigo ?? 2, maxT: fridge.maxT_frigo ?? 8, color: fridge.color, compartment: 'frigo' },
+        type: '+4', minT: minF, maxT: maxF, color: fridge.color, compartment: 'frigo',
+        typicalTemp: fridge.typicalT_frigo ?? ((minF+maxF)/2) },
       { uid: fridge.id+':freezer', parentId: fridge.id, name: fridge.name, label: fridge.name+' [Freezer]',
-        type: '-20', minT: fridge.minT_freezer ?? -25, maxT: fridge.maxT_freezer ?? -15, color: fridge.color2 || fridge.color, compartment: 'freezer' },
+        type: '-20', minT: minZ, maxT: maxZ, color: fridge.color2 || fridge.color, compartment: 'freezer',
+        typicalTemp: fridge.typicalT_freezer ?? ((minZ+maxZ)/2) },
     ];
   }
+  const mn = fridge.minT, mx = fridge.maxT;
   return [{ uid: fridge.id, parentId: fridge.id, name: fridge.name, label: fridge.name,
-    type: fridge.type, minT: fridge.minT, maxT: fridge.maxT, color: fridge.color, compartment: null }];
+    type: fridge.type, minT: mn, maxT: mx, color: fridge.color, compartment: null,
+    typicalTemp: fridge.typicalTemp ?? ((mn+mx)/2) }];
 }
 
 function getAllUnits() {
@@ -120,13 +145,30 @@ function evalTemp(unit, temp) {
   return 'ok';
 }
 
-/* ── Random temperature generator (realistic) ── */
-function generateRandomTemp(unit) {
-  const center = unit.type==='+4' ? 4.5 : -20;
-  const spread = unit.type==='+4' ? 1.8 : 2.5;
-  const u1=Math.random(), u2=Math.random();
-  const z = Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
-  return Math.round((center + z*spread*0.5)*10)/10;
+/* ── Random temperature generator (realistic, per-unit center) ── */
+function generateRandomTemp(unit, forceIrregular) {
+  /* Centro = typicalTemp specifico dell'unità, fallback = media range */
+  const center = unit.typicalTemp ?? (unit.type==='+4' ? 4.5 : -20);
+  const sigma  = unit.type==='+4' ? 0.5 : 0.8;   /* deviazione standard piccola */
+
+  /* Box-Muller normal distribution */
+  const u1 = Math.random(), u2 = Math.random();
+  const z  = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+
+  if (forceIrregular) {
+    /* Genera temperatura leggermente fuori range (1-3 °C oltre il limite) */
+    const margin = 1.0 + Math.random() * 2.0;
+    if (Math.random() < 0.5) {
+      return Math.round((unit.minT - margin) * 10) / 10;   /* sotto il minimo */
+    } else {
+      return Math.round((unit.maxT + margin) * 10) / 10;   /* sopra il massimo */
+    }
+  }
+
+  /* Generazione normale: clamp dentro il range per evitare allarmi accidentali */
+  let temp = center + z * sigma;
+  temp = Math.max(unit.minT + 0.3, Math.min(unit.maxT - 0.3, temp));
+  return Math.round(temp * 10) / 10;
 }
 
 /* ── Generate ID ── */
