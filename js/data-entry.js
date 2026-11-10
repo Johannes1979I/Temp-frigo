@@ -1,247 +1,221 @@
-/* data-entry.js — Temperature Data Entry Grid + Batch Generator */
+/* data-entry.js — griglia delle rilevazioni + generazione batch */
 
 let selectedUnitIdx = 0;
+let currentAcqMethod = 'Manuale';
 
 function renderDataGrid() {
   const container = document.getElementById('data-grid-container');
   if (!container) return;
   const units = getAllUnits();
-  if (!units.length) { container.innerHTML = '<p style="color:var(--text-muted);text-align:center;padding:20px">Nessun frigorifero configurato. Vai in Impostazioni per aggiungerne.</p>'; return; }
+  if (!units.length) { container.innerHTML = '<div class="empty-msg">Nessun frigorifero configurato. Aggiungilo in Impostazioni.</div>'; return; }
 
   const workDays = getWorkingDays(state.year, state.month);
   if (selectedUnitIdx >= units.length) selectedUnitIdx = 0;
   const unit = units[selectedUnitIdx];
+  const uid = escJs(unit.uid);
 
-  // Unit selector tabs
-  let html = '<div class="fridge-tabs">';
-  units.forEach((u, i) => {
-    const sel = i===selectedUnitIdx ? 'active' : '';
-    const shortName = u.compartment ? u.name.split(' \u2014 ')[0]+' ['+u.compartment.charAt(0).toUpperCase()+']' : u.name.split(' \u2014 ')[0];
-    html += '<button class="fridge-tab '+sel+'" style="--fc:'+u.color+'" onclick="selectUnitTab('+i+')">'+shortName+'</button>';
-  });
-  html += '</div>';
+  let html = '<div class="pill-tabs">' + units.map((u, i) => {
+    const shortName = u.name.split(' — ')[0] + (u.compartment ? ' · ' + (u.compartment === 'frigo' ? 'Frigo' : 'Freezer') : '');
+    return `<button class="pill-tab ${i === selectedUnitIdx ? 'active' : ''}" style="--fc:${safeColor(u.color)}" onclick="selectUnitTab(${i})"><span class="dot" style="background:${safeColor(u.color)}"></span>${escHtml(shortName)}</button>`;
+  }).join('') + '</div>';
 
-  // Acq bar
-  html += '<div class="acq-bar">';
-  html += '<span class="acq-label">Acquisizione:</span>';
-  html += '<button class="btn btn-sm btn-outline acq-btn'+(currentAcqMethod==='Manuale'?' active':'')+'" onclick="setAcqMethod(\'Manuale\')">\u270f\ufe0f Manuale</button>';
-  html += '<button class="btn btn-sm btn-outline acq-btn'+(currentAcqMethod==='WiFi'?' active':'')+'" onclick="setAcqMethod(\'WiFi\')">\ud83d\udcf6 WiFi</button>';
-  html += '<button class="btn btn-sm btn-outline acq-btn'+(currentAcqMethod==='Bluetooth'?' active':'')+'" onclick="setAcqMethod(\'Bluetooth\')">\ud83d\udd35 Bluetooth</button>';
-  html += '<div style="flex:1"></div>';
-  html += '<button class="btn btn-sm btn-primary" onclick="fillRandomTempsUnit()">\ud83c\udfb2 Genera T casuali</button>';
-  html += '<button class="btn btn-sm btn-outline" onclick="clearUnitMonth()">\ud83d\uddd1 Cancella mese</button>';
-  html += '</div>';
+  html += `<div class="acq-bar">
+    <span class="acq-label">Acquisizione:</span>
+    <button class="btn btn-sm btn-outline acq-btn${currentAcqMethod === 'Manuale' ? ' active' : ''}" onclick="setAcqMethod('Manuale')"><i data-lucide="pencil"></i>Manuale</button>
+    <button class="btn btn-sm btn-outline acq-btn${currentAcqMethod === 'WiFi' ? ' active' : ''}" onclick="setAcqMethod('WiFi')"><i data-lucide="wifi"></i>WiFi</button>
+    <button class="btn btn-sm btn-outline acq-btn${currentAcqMethod === 'Bluetooth' ? ' active' : ''}" onclick="setAcqMethod('Bluetooth')"><i data-lucide="bluetooth"></i>Bluetooth</button>
+    <div class="acq-spacer"></div>
+    <button class="btn btn-sm btn-outline" onclick="fillRandomTempsUnit()"><i data-lucide="dices"></i>Genera T casuali</button>
+    <button class="btn-danger-outline" onclick="clearUnitMonth()"><i data-lucide="trash-2"></i>Cancella mese</button>
+  </div>`;
 
-  // Operator
-  html += '<div class="operator-row"><label>Operatore:</label><input type="text" id="operator-name" placeholder="Nome operatore" value="'+getOperator()+'" onchange="setOperator(this.value)"></div>';
-
-  // Table
-  const typeLabel = unit.type==='+4' ? '+4\u00b0C' : '-20\u00b0C';
-  html += '<div style="margin-bottom:8px;font-size:13px;color:var(--text-secondary)"><strong style="color:'+unit.color+'">'+unit.label+'</strong> \u2014 '+typeLabel+' \u2014 Range: '+unit.minT+'\u00b0C ~ '+unit.maxT+'\u00b0C</div>';
+  html += `<div class="operator-row"><label for="operator-name">Operatore:</label><input type="text" id="operator-name" placeholder="Nome operatore" value="${escHtml(getOperator())}" onchange="setOperator(this.value)"></div>`;
+  html += `<div class="grid-info"><strong style="color:${safeColor(unit.color)}">${escHtml(unit.label)}</strong> — ${typeLabelOf(unit.type)} — limiti ${escHtml(unit.minT)} / ${escHtml(unit.maxT)} °C <span style="color:var(--text-muted)">(attenzione entro 1 °C dai limiti)</span></div>`;
 
   html += '<div class="data-table-wrap"><table class="temp-table"><thead><tr>';
-  html += '<th>Giorno</th><th>Data</th><th>Temperatura (\u00b0C)</th><th>Ora</th><th>Metodo</th><th>Stato</th><th>Note</th><th></th>';
+  html += '<th>Giorno</th><th>Data</th><th>Temperatura (°C)</th><th>Ora</th><th>Metodo</th><th>Stato</th><th>Note</th><th></th>';
   html += '</tr></thead><tbody>';
 
   const dayNames = ['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
   const todayStr = fmtDate(new Date());
+  const statusMap = { ok:'<span class="status-badge st-ok">OK</span>', warning:'<span class="status-badge st-warn">⚠ ATTENZIONE</span>', alarm:'<span class="status-badge st-alarm">✖ ALLARME</span>', missing:'<span class="status-badge st-miss">—</span>' };
+  const placeholder = unit.type === '+4' ? '4.0' : '-20.0';
 
   workDays.forEach(d => {
     const r = getReading(unit.uid, d.date);
-    const temp = r ? r.temp : '';
-    const ev = r ? evalTemp(unit, r.temp) : 'missing';
-    const statusMap = { ok:'<span class="status-badge st-ok">OK</span>', warning:'<span class="status-badge st-warn">\u26a0\ufe0f</span>', alarm:'<span class="status-badge st-alarm">ALLARME</span>', missing:'<span class="status-badge st-miss">\u2014</span>' };
+    const has = r && r.temp != null && !isNaN(r.temp);
+    const ev = has ? evalTemp(unit, r.temp) : 'missing';
     const isToday = d.date === todayStr;
-    const placeholder = unit.type==='+4' ? '4.0' : '-20.0';
-
-    html += '<tr class="temp-row '+ev+(isToday?' today-row':'')+'">';
-    html += '<td class="day-name">'+dayNames[d.dow]+'</td>';
-    html += '<td class="day-date">'+d.dayNum+'/'+(state.month+1)+'</td>';
-    html += '<td><input type="number" step="0.1" class="temp-input" value="'+(temp!==''?temp:'')+'" placeholder="'+placeholder+'" onchange="onTempInput(\''+unit.uid+'\',\''+d.date+'\',this.value)" onfocus="this.select()"></td>';
-    html += '<td class="time-cell">'+(r?r.time:'')+'</td>';
-    html += '<td class="method-cell">'+(r?r.method:'')+'</td>';
-    html += '<td>'+statusMap[ev]+'</td>';
-    html += '<td><input type="text" class="note-input" value="'+(r?.notes||'')+'" placeholder="..." onchange="onNoteInput(\''+unit.uid+'\',\''+d.date+'\',this.value)"></td>';
-    html += '<td>'+(r?'<button class="btn-remove" onclick="onDeleteReading(\''+unit.uid+'\',\''+d.date+'\')">\u00d7</button>':'')+'</td>';
+    html += `<tr class="temp-row ${ev}${isToday ? ' today-row' : ''}">`;
+    html += `<td class="day-name">${dayNames[d.dow]}</td>`;
+    html += `<td class="day-date">${d.dayNum}/${state.month + 1}</td>`;
+    html += `<td class="${ev === 'alarm' ? 'cell-reject' : ev === 'warning' ? 'cell-warn' : ev === 'ok' ? 'cell-pass' : ''}"><input type="number" step="0.1" class="temp-input" value="${has ? r.temp : ''}" placeholder="${placeholder}" onchange="onTempInput('${uid}','${d.date}',this.value)" onfocus="this.select()" aria-label="Temperatura ${d.dayNum}/${state.month + 1}"></td>`;
+    html += `<td class="method-cell">${escHtml(r ? r.time : '')}</td>`;
+    html += `<td class="method-cell">${escHtml(r ? r.method : '')}</td>`;
+    html += `<td>${statusMap[ev]}</td>`;
+    html += `<td><input type="text" class="note-input" value="${escHtml(r?.notes || '')}" placeholder="…" onchange="onNoteInput('${uid}','${d.date}',this.value)"></td>`;
+    html += `<td>${r ? `<button class="btn-remove" title="Cancella la rilevazione" aria-label="Cancella" onclick="onDeleteReading('${uid}','${d.date}')">×</button>` : ''}</td>`;
     html += '</tr>';
   });
   html += '</tbody></table></div>';
 
-  // Summary
-  let ok=0, warn=0, alm=0, miss=0;
-  workDays.forEach(d => { const r=getReading(unit.uid,d.date); if(!r)miss++; else { const e=evalTemp(unit,r.temp); if(e==='ok')ok++; else if(e==='warning')warn++; else alm++; } });
-  html += '<div class="summary-bar"><span class="sum-ok">'+ok+' OK</span><span class="sum-warn">'+warn+' Attenzione</span><span class="sum-alarm">'+alm+' Allarmi</span><span class="sum-miss">'+miss+' Mancanti</span></div>';
+  let ok = 0, warn = 0, alm = 0, miss = 0;
+  workDays.forEach(d => { const r = getReading(unit.uid, d.date); const e = r ? evalTemp(unit, r.temp) : 'missing'; if (e === 'ok') ok++; else if (e === 'warning') warn++; else if (e === 'alarm') alm++; else miss++; });
+  html += `<div class="summary-bar"><span class="sum-ok">${ok} OK</span><span class="sum-warn">${warn} attenzione</span><span class="sum-alarm">${alm} allarmi</span><span class="sum-miss">${miss} mancanti</span></div>`;
 
   container.innerHTML = html;
 }
 
-let currentAcqMethod = 'Manuale';
-function setAcqMethod(m) {
+async function setAcqMethod(m) {
   currentAcqMethod = m;
-  const units = getAllUnits();
-  const unit = units[selectedUnitIdx];
-  if ((m==='WiFi'||m==='Bluetooth') && unit) {
-    if (confirm('Simulare acquisizione '+m+' per '+unit.label+'?\n(Temperatura realistica per oggi)')) {
+  const unit = getAllUnits()[selectedUnitIdx];
+  if ((m === 'WiFi' || m === 'Bluetooth') && unit) {
+    if (await uiConfirm('Simulare l\'acquisizione ' + m + ' per ' + unit.label + ' (oggi)?\nLa temperatura viene generata a caso: non è una misura reale.', { title: 'Simulazione', danger: false })) {
       const today = fmtDate(new Date());
-      setReading(unit.uid, today, generateRandomTemp(unit), m, getOperator(), 'Auto-'+m);
+      setReading(unit.uid, today, generateRandomTemp(unit), m, getOperator(), 'Auto-' + m);
     }
   }
   renderDataGrid();
 }
 
-function getOperator() { try{return localStorage.getItem('tempfrigo_operator')||'';}catch(e){return '';} }
-function setOperator(v) { try{localStorage.setItem('tempfrigo_operator',v);}catch(e){} }
+function getOperator() { try { return localStorage.getItem('tempfrigo_operator') || ''; } catch(e) { return ''; } }
+function setOperator(v) { try { localStorage.setItem('tempfrigo_operator', v); } catch(e) {} }
 
-function selectUnitTab(i) { selectedUnitIdx=i; renderDataGrid(); }
+function selectUnitTab(i) { selectedUnitIdx = i; renderDataGrid(); }
 
 function onTempInput(uid, dateStr, val) {
-  if(val===''||isNaN(parseFloat(val))) return;
-  setReading(uid, dateStr, val, currentAcqMethod, getOperator(), '');
+  const s = String(val == null ? '' : val).trim();
+  if (s === '') {
+    if (getReading(uid, dateStr)) { deleteReading(uid, dateStr); uiToast('Rilevazione cancellata', 'info'); }
+    renderDataGrid(); return;
+  }
+  const n = parseFloat(s.replace(',', '.'));
+  if (!isFinite(n)) { uiToast('Temperatura non valida: ' + s, 'err'); renderDataGrid(); return; }
+  // correggendo la temperatura la nota resta (prima veniva cancellata)
+  const old = getReading(uid, dateStr);
+  setReading(uid, dateStr, n, currentAcqMethod, getOperator(), old?.notes || '');
   renderDataGrid();
 }
-function onNoteInput(uid, dateStr, val) { const r=getReading(uid,dateStr); if(r){r.notes=val; saveData();} }
-function onDeleteReading(uid, dateStr) { deleteReading(uid,dateStr); renderDataGrid(); }
+function onNoteInput(uid, dateStr, val) {
+  const r = getReading(uid, dateStr);
+  if (r) { r.notes = val; saveData(); }
+  else uiToast('Inserisci prima la temperatura: la nota si salva insieme alla rilevazione.', 'warn');
+}
+async function onDeleteReading(uid, dateStr) {
+  const r = getReading(uid, dateStr); if (!r) return;
+  if (!await uiConfirm('Cancellare la rilevazione del ' + dateStr.slice(8) + '/' + dateStr.slice(5, 7) + ' (' + r.temp + ' °C)?')) return;
+  deleteReading(uid, dateStr); renderDataGrid();
+}
 
-function fillRandomTempsUnit() {
-  const units = getAllUnits();
-  const unit = units[selectedUnitIdx];
-  if(!unit) return;
-  if(!confirm('Generare temperature casuali per "'+unit.label+'" \u2014 '+MONTH_NAMES[state.month]+' '+state.year+'?\n(Sovrascrive i dati esistenti)')) return;
+async function fillRandomTempsUnit() {
+  const unit = getAllUnits()[selectedUnitIdx];
+  if (!unit) return;
+  if (!await uiConfirm('Generare temperature casuali per «' + unit.label + '» — ' + MONTH_NAMES[state.month] + ' ' + state.year + '?\nI dati già inseriti nel mese verranno sovrascritti.', { title: 'Genera temperature' })) return;
   /* ~10% di probabilità di irregolarità per singola rilevazione */
   getWorkingDays(state.year, state.month).forEach(d => {
     const irregular = Math.random() < 0.10;
-    setReading(unit.uid, d.date, generateRandomTemp(unit, irregular), 'Generato', getOperator(), '');
+    state.readings[getReadingKey(unit.uid, d.date)] = { temp: generateRandomTemp(unit, irregular), time: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }),
+      method: 'Generato', operator: getOperator(), notes: '', timestamp: new Date().toISOString() };
   });
+  saveData();
   renderDataGrid();
 }
 
-function clearUnitMonth() {
-  const units = getAllUnits();
-  const unit = units[selectedUnitIdx];
-  if(!unit) return;
-  if(!confirm('Cancellare tutti i dati di '+MONTH_NAMES[state.month]+' per "'+unit.label+'"?')) return;
-  getWorkingDays(state.year, state.month).forEach(d => deleteReading(unit.uid, d.date));
+async function clearUnitMonth() {
+  const unit = getAllUnits()[selectedUnitIdx];
+  if (!unit) return;
+  if (!await uiConfirm('Cancellare tutti i dati di ' + MONTH_NAMES[state.month] + ' ' + state.year + ' per «' + unit.label + '»?')) return;
+  getWorkingDays(state.year, state.month).forEach(d => { delete state.readings[getReadingKey(unit.uid, d.date)]; });
+  saveData();
   renderDataGrid();
 }
 
-/* ══════════════════════════════════════════════
-   BATCH TEMPERATURE GENERATOR
-   ══════════════════════════════════════════════ */
-
-function showBatchModal() {
-  document.getElementById('batch-modal').classList.remove('hidden');
-  renderBatchForm();
+/* ══════ GENERAZIONE BATCH ══════ */
+function fillMonthSelects() {
+  document.querySelectorAll('select.month-select').forEach(s => {
+    if (s.options.length) return;
+    s.innerHTML = MONTH_NAMES.map((n, i) => `<option value="${i}">${n}</option>`).join('');
+    s.value = s.dataset.default || '0';
+  });
 }
+function showBatchModal() { fillMonthSelects(); document.getElementById('batch-modal').classList.remove('hidden'); renderBatchForm(); }
 function hideBatchModal() { document.getElementById('batch-modal').classList.add('hidden'); }
 
 function renderBatchForm() {
   const container = document.getElementById('batch-fridge-checks');
   const units = getAllUnits();
-  container.innerHTML = '<label style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-weight:600"><input type="checkbox" id="batch-all-units" onchange="toggleBatchAll(this.checked)" checked> Seleziona tutti</label>' +
-    units.map((u,i) => '<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" class="batch-unit-chk" value="'+i+'" checked> <span style="color:'+u.color+'">\u25cf</span> '+u.label+'</label>').join('');
-
-  // Year range
+  container.innerHTML = '<label style="font-weight:600"><input type="checkbox" id="batch-all-units" onchange="toggleBatchAll(this.checked)" checked> Seleziona tutti</label>' +
+    units.map((u, i) => `<label><input type="checkbox" class="batch-unit-chk" value="${i}" checked> <span class="dot" style="background:${safeColor(u.color)}"></span> ${escHtml(u.label)}</label>`).join('');
   const curYear = new Date().getFullYear();
   document.getElementById('batch-year-from').value = curYear;
   document.getElementById('batch-year-to').value = curYear;
   document.getElementById('batch-progress').innerHTML = '';
   document.getElementById('batch-go-btn').disabled = false;
 }
-
-function toggleBatchAll(checked) {
-  document.querySelectorAll('.batch-unit-chk').forEach(c => c.checked = checked);
-}
+function toggleBatchAll(checked) { document.querySelectorAll('.batch-unit-chk').forEach(c => c.checked = checked); }
 
 function runBatchGeneration() {
   const units = getAllUnits();
   const selected = [];
   document.querySelectorAll('.batch-unit-chk:checked').forEach(c => selected.push(parseInt(c.value)));
-  if (!selected.length) { alert('Selezionare almeno un frigorifero.'); return; }
+  if (!selected.length) { alert('Seleziona almeno un frigorifero.'); return; }
 
   const yearFrom = parseInt(document.getElementById('batch-year-from').value);
   const yearTo = parseInt(document.getElementById('batch-year-to').value);
-  if (isNaN(yearFrom)||isNaN(yearTo)||yearFrom>yearTo) { alert('Intervallo anni non valido.'); return; }
-  if (yearTo - yearFrom > 10) { alert('Massimo 10 anni per volta.'); return; }
-
   const monthFrom = parseInt(document.getElementById('batch-month-from').value);
   const monthTo = parseInt(document.getElementById('batch-month-to').value);
+  if (isNaN(yearFrom) || isNaN(yearTo) || yearFrom > yearTo) { alert('Intervallo di anni non valido.'); return; }
+  if (yearTo - yearFrom > 10) { alert('Massimo 10 anni per volta.'); return; }
+  if (yearFrom === yearTo && monthFrom > monthTo) { alert('Il mese iniziale viene dopo il mese finale.'); return; }
   const overwrite = document.getElementById('batch-overwrite').checked;
   const operator = getOperator() || 'Batch';
 
-  const progressEl = document.getElementById('batch-progress');
-  const btn = document.getElementById('batch-go-btn');
-  btn.disabled = true;
-
-  /* ── Pre-calcola tutti i task raggruppando per data ──
-     Per ogni giorno decide max 3 irregolarità distribuite casualmente
-     tra le unità selezionate.  Probabilità giornaliere:
-       ~70% → 0 irregolarità, ~15% → 1, ~10% → 2, ~5% → 3              */
-  let generated = 0, skipped = 0;
-  const tasks = [];   /* flat array con .forceIrregular preassegnato */
-
-  for (let y=yearFrom; y<=yearTo; y++) {
-    const mStart = (y===yearFrom) ? monthFrom : 0;
-    const mEnd = (y===yearTo) ? monthTo : 11;
-    for (let m=mStart; m<=mEnd; m++) {
-      const wd = getWorkingDays(y, m);
-      wd.forEach(d => {
-        /* Raccogli tutte le unità per questo giorno */
-        const dayTasks = [];
-        selected.forEach(idx => {
-          const u = units[idx];
-          dayTasks.push({uid:u.uid, date:d.date, unit:u, forceIrregular:false});
-        });
-
-        /* Quanti allarmi oggi? (max 3) */
+  /* Per ogni giorno al massimo 3 irregolarità distribuite fra le unità scelte:
+     ~70% → 0, ~15% → 1, ~10% → 2, ~5% → 3 */
+  const tasks = [];
+  for (let y = yearFrom; y <= yearTo; y++) {
+    const mStart = (y === yearFrom) ? monthFrom : 0;
+    const mEnd = (y === yearTo) ? monthTo : 11;
+    for (let m = mStart; m <= mEnd; m++) {
+      getWorkingDays(y, m).forEach(d => {
+        const dayTasks = selected.filter(idx => units[idx]).map(idx => ({ uid: units[idx].uid, date: d.date, unit: units[idx], forceIrregular: false }));
         const rnd = Math.random();
         const numIrreg = rnd < 0.70 ? 0 : rnd < 0.85 ? 1 : rnd < 0.95 ? 2 : 3;
-
         if (numIrreg > 0 && dayTasks.length > 0) {
-          /* Mescola gli indici (Fisher-Yates) e marca i primi numIrreg come irregolari */
-          const indices = dayTasks.map((_,i)=>i);
-          for (let i=indices.length-1; i>0; i--) {
-            const j=Math.floor(Math.random()*(i+1));
-            [indices[i],indices[j]]=[indices[j],indices[i]];
-          }
-          for (let k=0; k<Math.min(numIrreg, indices.length); k++) {
-            dayTasks[indices[k]].forceIrregular = true;
-          }
+          const indices = dayTasks.map((_, i) => i);
+          for (let i = indices.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [indices[i], indices[j]] = [indices[j], indices[i]]; }
+          for (let k = 0; k < Math.min(numIrreg, indices.length); k++) dayTasks[indices[k]].forceIrregular = true;
         }
-
-        dayTasks.forEach(t => tasks.push(t));
+        tasks.push(...dayTasks);
       });
     }
   }
-  const totalDays = tasks.length;
+  const total = tasks.length;
+  if (!total) { alert('Niente da generare.'); return; }
+  const progressEl = document.getElementById('batch-progress');
+  const btn = document.getElementById('batch-go-btn');
+  btn.disabled = true;
+  progressEl.innerHTML = '<div class="batch-bar-wrap"><div class="batch-bar" id="batch-bar" style="width:0%"></div></div><div id="bstat">Generazione in corso… 0/' + total + '</div>';
 
-  progressEl.innerHTML = '<div class="batch-progress-bar-wrap"><div class="batch-progress-bar" id="batch-bar" style="width:0%"></div></div><div id="batch-status">Generazione in corso... 0/'+totalDays+'</div>';
-
-  // Process in chunks to keep UI responsive
-  let idx = 0;
-  const chunkSize = 200;
+  let idx = 0, generated = 0, skipped = 0;
   function processChunk() {
-    const end = Math.min(idx+chunkSize, tasks.length);
-    for (; idx<end; idx++) {
+    const end = Math.min(idx + 200, total);
+    for (; idx < end; idx++) {
       const t = tasks[idx];
-      const existing = getReading(t.uid, t.date);
-      if (existing && !overwrite) { skipped++; continue; }
-      const temp = generateRandomTemp(t.unit, t.forceIrregular);
-      // Direct write to avoid excessive saveData calls
-      state.readings[getReadingKey(t.uid, t.date)] = {
-        temp, time:'08:00', method:'Batch', operator, notes:'', timestamp:new Date().toISOString()
-      };
+      if (getReading(t.uid, t.date) && !overwrite) { skipped++; continue; }
+      state.readings[getReadingKey(t.uid, t.date)] = { temp: generateRandomTemp(t.unit, t.forceIrregular), time: '08:00', method: 'Batch', operator, notes: '', timestamp: new Date().toISOString() };
       generated++;
     }
-    const pct = Math.round(idx/totalDays*100);
-    document.getElementById('batch-bar').style.width = pct+'%';
-    document.getElementById('batch-status').textContent = 'Generazione in corso... '+idx+'/'+totalDays;
-
-    if (idx < tasks.length) {
-      requestAnimationFrame(processChunk);
-    } else {
-      saveData();
+    document.getElementById('batch-bar').style.width = Math.round(idx / total * 100) + '%';
+    document.getElementById('bstat').textContent = 'Generazione in corso… ' + idx + '/' + total;
+    if (idx < total) requestAnimationFrame(processChunk);
+    else {
+      const ok = saveData();
       btn.disabled = false;
-      progressEl.innerHTML = '<div style="padding:12px;background:var(--success-pale);border-radius:8px;color:var(--success);font-weight:600">\u2705 Completato! '+generated+' temperature generate'+(skipped?' ('+skipped+' esistenti saltate)':'')+'</div>';
+      progressEl.innerHTML = ok
+        ? '<div class="info-box ok"><strong>Completato: ' + generated + ' temperature generate</strong>' + (skipped ? ' (' + skipped + ' già presenti, lasciate com\'erano)' : '') + '</div>'
+        : '<div class="info-box warn">Le temperature sono state generate ma NON salvate: la memoria del browser è piena.</div>';
+      refreshCurrentSection();
     }
   }
   requestAnimationFrame(processChunk);

@@ -80,23 +80,28 @@ const MONTH_NAMES = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno',
 /* ── Helper: expand fridge into logical units ──
    A combo fridge expands to 2 units (frigo + freezer).
    Each unit is { uid, parentId, name, label, type, minT, maxT, color, compartment } */
+const TYPE_DEFAULTS = { '+4': { min: 2, max: 8 }, '-20': { min: -25, max: -15 } };
+/* numero valido o default: 0 e' un limite valido (prima "|| 2" lo trasformava in 2) */
+function numOr(v, def) { const n = typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v; return (n === null || n === undefined || n === '' || !isFinite(n)) ? def : n; }
 function getUnits(fridge) {
   if (fridge.type === 'combo') {
-    const minF = fridge.minT_frigo ?? 2, maxF = fridge.maxT_frigo ?? 8;
-    const minZ = fridge.minT_freezer ?? -25, maxZ = fridge.maxT_freezer ?? -15;
+    const minF = numOr(fridge.minT_frigo, 2), maxF = numOr(fridge.maxT_frigo, 8);
+    const minZ = numOr(fridge.minT_freezer, -25), maxZ = numOr(fridge.maxT_freezer, -15);
     return [
       { uid: fridge.id+':frigo',   parentId: fridge.id, name: fridge.name, label: fridge.name+' [Frigo]',
         type: '+4', minT: minF, maxT: maxF, color: fridge.color, compartment: 'frigo',
-        typicalTemp: fridge.typicalT_frigo ?? ((minF+maxF)/2) },
+        typicalTemp: numOr(fridge.typicalT_frigo, (minF+maxF)/2) },
       { uid: fridge.id+':freezer', parentId: fridge.id, name: fridge.name, label: fridge.name+' [Freezer]',
         type: '-20', minT: minZ, maxT: maxZ, color: fridge.color2 || fridge.color, compartment: 'freezer',
-        typicalTemp: fridge.typicalT_freezer ?? ((minZ+maxZ)/2) },
+        typicalTemp: numOr(fridge.typicalT_freezer, (minZ+maxZ)/2) },
     ];
   }
-  const mn = fridge.minT, mx = fridge.maxT;
+  // limiti mancanti/illeggibili: prima diventavano 0 (null) o NaN e gli allarmi sparivano o scattavano sempre
+  const d = TYPE_DEFAULTS[fridge.type] || TYPE_DEFAULTS['+4'];
+  const mn = numOr(fridge.minT, d.min), mx = numOr(fridge.maxT, d.max);
   return [{ uid: fridge.id, parentId: fridge.id, name: fridge.name, label: fridge.name,
     type: fridge.type, minT: mn, maxT: mx, color: fridge.color, compartment: null,
-    typicalTemp: fridge.typicalTemp ?? ((mn+mx)/2) }];
+    typicalTemp: numOr(fridge.typicalTemp, (mn+mx)/2) }];
 }
 
 function getAllUnits() {
@@ -104,6 +109,7 @@ function getAllUnits() {
   state.fridges.forEach(f => units.push(...getUnits(f)));
   return units;
 }
+function typeLabelOf(t) { return t === '+4' ? '+4°C' : '-20°C'; }
 
 /* ── Read / Write Readings (use uid) ── */
 function getReadingKey(uid, dateStr) { return uid+'|'+dateStr; }
@@ -116,7 +122,7 @@ function setReading(uid, dateStr, temp, method, operator, notes) {
     method: method||'Manuale', operator: operator||'', notes: notes||'',
     timestamp: new Date().toISOString(),
   };
-  saveData();
+  return saveData();
 }
 
 function deleteReading(uid, dateStr) {
@@ -124,24 +130,63 @@ function deleteReading(uid, dateStr) {
   saveData();
 }
 
-/* ── Persistence ── */
+/* ── Persistence ──
+   Se la memoria del browser e' piena (i PDF archiviati pesano, e il sito e' condiviso con il Registro CQI)
+   il salvataggio falliva in silenzio: ora si tolgono i report archiviati piu' vecchi e, se non basta, si avvisa. */
+let _saveErrNotified = 0;
 function saveData() {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify({fridges:state.fridges, readings:state.readings})); }
-  catch(e) { console.warn('Save error:',e); }
+  let payload;
+  try { payload = JSON.stringify({fridges:state.fridges, readings:state.readings}); }
+  catch(e) { console.error('Salvataggio:', e); uiToast('Dati NON salvati: '+e.message, 'err'); return false; }
+  try { localStorage.setItem(STORAGE_KEY, payload); return true; }
+  catch(e) {
+    const tolti = freeArchiveSpace(() => localStorage.setItem(STORAGE_KEY, payload));
+    if (tolti >= 0) { uiToast('Memoria del browser quasi piena: eliminati '+tolti+' report PDF archiviati (i più vecchi) per salvare i dati. Esporta un backup.', 'warn', 9000); return true; }
+    console.error('Salvataggio:', e);
+    if (Date.now() - _saveErrNotified > 4000) {
+      _saveErrNotified = Date.now();
+      alert('❌ Dati NON salvati: la memoria del browser è piena.\nEsporta subito un backup (Impostazioni → Esporta) e libera spazio.');
+    }
+    return false;
+  }
+}
+function freeArchiveSpace(tentativo) {
+  let ar; try { ar = JSON.parse(localStorage.getItem('tempfrigo_archive')||'[]'); } catch(e) { return -1; }
+  if (!Array.isArray(ar) || !ar.length) return -1;
+  let tolti = 0;
+  while (ar.length) {
+    ar.pop(); tolti++;
+    try { if (ar.length) localStorage.setItem('tempfrigo_archive', JSON.stringify(ar)); else localStorage.removeItem('tempfrigo_archive'); } catch(e) { continue; }
+    try { tentativo(); return tolti; } catch(e) {}
+  }
+  return -1;
 }
 function loadData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { const d=JSON.parse(raw); if(d.fridges?.length) state.fridges=d.fridges; if(d.readings) state.readings=d.readings; }
-  } catch(e) {}
+  let raw = null;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch(e) {}
+  if (raw) {
+    try {
+      const d = JSON.parse(raw);
+      if (Array.isArray(d.fridges) && d.fridges.length) state.fridges = d.fridges;
+      if (d.readings && typeof d.readings === 'object') state.readings = d.readings;
+    } catch(e) {
+      // dati illeggibili: copia di sicurezza prima che un salvataggio li sovrascriva
+      console.error('Dati salvati illeggibili:', e);
+      try { localStorage.setItem(STORAGE_KEY+'_illeggibile_'+localDateStr(), raw); } catch(e2) {}
+      setTimeout(() => alert('⚠️ I dati salvati in questo browser non sono leggibili. Ne è stata fatta una copia di sicurezza ('+STORAGE_KEY+'_illeggibile_…): importa un backup JSON se ne hai uno.'), 500);
+    }
+  }
   if (!state.fridges.length) state.fridges = JSON.parse(JSON.stringify(DEFAULT_FRIDGES));
 }
 
-/* ── Temperature evaluation ── */
+/* ── Temperature evaluation ──
+   allarme = fuori dai limiti; attenzione = entro 1 °C dai limiti (limiti compresi) */
 function evalTemp(unit, temp) {
-  if (temp==null || isNaN(temp)) return 'missing';
-  if (temp < unit.minT || temp > unit.maxT) return 'alarm';
-  if (temp <= unit.minT+1 || temp >= unit.maxT-1) return 'warning';
+  if (temp==null || temp==='' || isNaN(temp)) return 'missing';
+  const t = Math.round(parseFloat(temp)*1000)/1000;
+  if (t < unit.minT || t > unit.maxT) return 'alarm';
+  const r6 = x => Math.round(x*1e6)/1e6; // es. 8.3-1 = 7.300000000000001: 7,3 non sarebbe stato «attenzione»
+  if (t <= r6(unit.minT+1) || t >= r6(unit.maxT-1)) return 'warning';
   return 'ok';
 }
 
@@ -151,8 +196,8 @@ function generateRandomTemp(unit, forceIrregular) {
   const center = unit.typicalTemp ?? (unit.type==='+4' ? 4.5 : -20);
   const sigma  = unit.type==='+4' ? 0.5 : 0.8;   /* deviazione standard piccola */
 
-  /* Box-Muller normal distribution */
-  const u1 = Math.random(), u2 = Math.random();
+  /* Box-Muller normal distribution (1-random: mai log(0)) */
+  const u1 = 1-Math.random(), u2 = Math.random();
   const z  = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
 
   if (forceIrregular) {
@@ -172,4 +217,9 @@ function generateRandomTemp(unit, forceIrregular) {
 }
 
 /* ── Generate ID ── */
-function newFridgeId() { return 'F'+Date.now().toString(36).toUpperCase(); }
+function newFridgeId() {
+  let id;
+  do { id = 'F'+Date.now().toString(36).toUpperCase()+Math.floor(Math.random()*1296).toString(36).toUpperCase(); }
+  while (state.fridges.some(f => f.id === id));
+  return id;
+}
